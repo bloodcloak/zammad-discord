@@ -1,0 +1,6 @@
+-----------------------------------------------------------------------------
+outline-discord
+Source: https://github.com/lolPants/outline-discord
+Copyright: 2021 Jack Baron DEV
+License: MIT license
+-----------------------------------------------------------------------------
