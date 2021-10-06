@@ -1,0 +1,116 @@
+From 5fde0f795b16d01856ab43189c0e7de00279038b Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Fri, 10 Sep 2021 17:58:45 -0400
+Subject: [PATCH 3/4] omniauth discord implementation
+
+---
+ config/initializers/omniauth.rb  |  3 ++
+ db/seeds/settings.rb             | 56 ++++++++++++++++++++++++++++++++
+ lib/omniauth/discord_database.rb | 13 ++++++++
+ 3 files changed, 72 insertions(+)
+ create mode 100644 lib/omniauth/discord_database.rb
+
+diff --git a/config/initializers/omniauth.rb b/config/initializers/omniauth.rb
+index 3b3e0bd28..c35fe7736 100644
+--- a/config/initializers/omniauth.rb
++++ b/config/initializers/omniauth.rb
+@@ -46,6 +46,9 @@ Rails.application.config.middleware.use OmniAuth::Builder do
+   # weibo database connect
+   provider :weibo_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database'
+ 
++  # discord database connect
++  provider :discord_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database', scope: 'identify', callback_url: '/auth/discord/callback'
++
+   # SAML database connect
+   provider :saml_database
+ end
+diff --git a/db/seeds/settings.rb b/db/seeds/settings.rb
+index fadb7cfd8..a14a9e0e5 100644
+--- a/db/seeds/settings.rb
++++ b/db/seeds/settings.rb
+@@ -1644,6 +1644,62 @@ Setting.create_if_not_exists(
+   },
+   frontend:    false
+ )
++Setting.create_if_not_exists(
++  title:       'Authentication via %s',
++  name:        'auth_discord',
++  area:        'Security::ThirdPartyAuthentication',
++  description: 'Enables user authentication via %s. Register your app first at [%s](%s).',
++  options:     {
++    form: [
++      {
++        display: '',
++        null:    true,
++        name:    'auth_discord',
++        tag:     'boolean',
++        options: {
++          true  => 'yes',
++          false => 'no',
++        },
++      },
++    ],
++  },
++  preferences: {
++    controller:       'SettingsAreaSwitch',
++    sub:              ['auth_discord_credentials'],
++    title_i18n:       ['Discord'],
++    description_i18n: ['Discord', 'Discord Developer Portal', 'https://discord.com/developers/applications'],
++    permission:       ['admin.security'],
++  },
++  state:       false,
++  frontend:    true
++)
++Setting.create_if_not_exists(
++  title:       'Discord App Credentials',
++  name:        'auth_discord_credentials',
++  area:        'Security::ThirdPartyAuthentication::Discord',
++  description: 'Enables user authentication via Discord.',
++  options:     {
++    form: [
++      {
++        display: 'Client ID',
++        null:    true,
++        name:    'client_id',
++        tag:     'input',
++      },
++      {
++        display: 'Client Secret',
++        null:    true,
++        name:    'client_secret',
++        tag:     'input',
++      },
++    ],
++  },
++  state:       {},
++  preferences: {
++    permission: ['admin.security'],
++  },
++  frontend:    false
++)
+ Setting.create_if_not_exists(
+   title:       'Authentication via %s',
+   name:        'auth_saml',
+diff --git a/lib/omniauth/discord_database.rb b/lib/omniauth/discord_database.rb
+new file mode 100644
+index 000000000..7bc93088d
+--- /dev/null
++++ b/lib/omniauth/discord_database.rb
+@@ -0,0 +1,13 @@
++class DiscordDatabase < OmniAuth::Strategies::Discord
++    option :name, 'discord'
++  
++    def initialize(app, *args, &block)
++  
++      # database lookup
++      config  = Setting.get('auth_discord_credentials') || {}
++      args[0] = config['client_id']
++      args[1] = config['client_secret']
++      super
++    end
++  
++  end
+\ No newline at end of file
+-- 
+2.31.1.windows.1
+

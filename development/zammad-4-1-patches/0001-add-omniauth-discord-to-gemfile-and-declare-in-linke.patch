@@ -1,0 +1,42 @@
+From 6e9d44fce8e19e1f79e41607582d2e609496b8ba Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Fri, 10 Sep 2021 14:50:41 -0400
+Subject: [PATCH 1/4] add omniauth discord to gemfile and declare in linked
+ accounts
+
+---
+ Gemfile                                                      | 1 +
+ .../app/controllers/_profile/linked_accounts.coffee          | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/Gemfile b/Gemfile
+index 274fdf0f9..3382328b8 100644
+--- a/Gemfile
++++ b/Gemfile
+@@ -86,6 +86,7 @@ gem 'omniauth-microsoft-office365'
+ gem 'omniauth-saml'
+ gem 'omniauth-twitter'
+ gem 'omniauth-weibo-oauth2'
++gem 'omniauth-discord'
+ 
+ # channels
+ gem 'gmail_xoauth'
+diff --git a/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee b/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
+index 4cbdf3694..24a1d7f08 100644
+--- a/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
++++ b/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
+@@ -101,6 +101,11 @@ App.Config.set('auth_provider_all', {
+     name:   'Weibo'
+     config: 'auth_weibo'
+     class:  'weibo'
++  discord:
++    url:    '/auth/discord'
++    name:   'Discord'
++    config: 'auth_discord'
++    class:  'discord'
+   saml:
+     url:    '/auth/saml'
+     name:   'SAML'
+-- 
+2.31.1.windows.1
+

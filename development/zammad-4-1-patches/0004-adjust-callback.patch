@@ -1,0 +1,25 @@
+From a11d982188018110e9a36952cd75f7116052a948 Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Sat, 11 Sep 2021 00:12:34 -0400
+Subject: [PATCH 4/4] adjust callback
+
+---
+ config/initializers/omniauth.rb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config/initializers/omniauth.rb b/config/initializers/omniauth.rb
+index c35fe7736..92938feb9 100644
+--- a/config/initializers/omniauth.rb
++++ b/config/initializers/omniauth.rb
+@@ -47,7 +47,7 @@ Rails.application.config.middleware.use OmniAuth::Builder do
+   provider :weibo_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database'
+ 
+   # discord database connect
+-  provider :discord_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database', scope: 'identify', callback_url: '/auth/discord/callback'
++  provider :discord_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database', scope: 'identify'
+ 
+   # SAML database connect
+   provider :saml_database
+-- 
+2.31.1.windows.1
+
