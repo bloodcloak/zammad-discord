@@ -47,7 +47,7 @@ cd "${ZAMMAD_DIR}"
 git checkout "${GIT_BRANCH}"
 
 # install zammad
-gem install bundler:1.17.3
+gem install bundler:2.2.20
 if [ "${RAILS_ENV}" == "production" ]; then
   bundle install --without test development mysql
 elif [ "${RAILS_ENV}" == "development" ]; then
