@@ -1,0 +1,854 @@
+From 9d294c4778a76022d83a6fea95d99457e116e6a2 Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Sat, 9 Apr 2022 23:10:05 -0400
+Subject: [PATCH] Port discord-5-old2 customizations over into one commit
+
+---
+ Gemfile                                       |  1 +
+ Gemfile.lock                                  |  9 ++
+ .../_profile/linked_accounts.coffee           |  5 ++
+ .../controllers/customer_ticket_create.coffee |  7 --
+ .../javascripts/app/lib/base/html5Upload.js   |  6 +-
+ .../views/customer_not_ticket_exists.jst.eco  |  5 +-
+ .../app/views/customer_ticket_create.jst.eco  | 33 ++++++-
+ .../javascripts/app/views/login.jst.eco       | 44 +++++-----
+ app/assets/stylesheets/svg-dimensions.css     |  1 +
+ app/assets/stylesheets/zammad.scss            | 87 ++++++++++---------
+ config/initializers/omniauth.rb               |  3 +
+ contrib/nginx/zammad.conf                     |  2 +-
+ contrib/nginx/zammad_ssl.conf                 |  2 +-
+ db/migrate/20211008110047_discord.rb          | 63 ++++++++++++++
+ db/seeds/settings.rb                          | 56 ++++++++++++
+ lib/omniauth/discord_database.rb              | 13 +++
+ public/assets/images/icons.svg                |  7 ++
+ public/assets/images/icons/discord-button.svg | 23 +++++
+ 18 files changed, 286 insertions(+), 81 deletions(-)
+ create mode 100644 db/migrate/20211008110047_discord.rb
+ create mode 100644 lib/omniauth/discord_database.rb
+ create mode 100644 public/assets/images/icons/discord-button.svg
+
+diff --git a/Gemfile b/Gemfile
+index cca5e1229..3850b359e 100644
+--- a/Gemfile
++++ b/Gemfile
+@@ -93,6 +93,7 @@ gem 'omniauth-microsoft-office365'
+ gem 'omniauth-saml'
+ gem 'omniauth-twitter'
+ gem 'omniauth-weibo-oauth2'
++gem 'omniauth-discord', git: 'https://github.com/bloodcloak/omniauth-discord.git'
+ 
+ # channels
+ gem 'gmail_xoauth'
+diff --git a/Gemfile.lock b/Gemfile.lock
+index 07cfdd652..0dedfa3a7 100644
+--- a/Gemfile.lock
++++ b/Gemfile.lock
+@@ -1,3 +1,11 @@
++GIT
++  remote: https://github.com/bloodcloak/omniauth-discord.git
++  revision: 2b269e5d729c30e748af0641c7e3e8a9e2d60f60
++  specs:
++    omniauth-discord (1.0.2)
++      omniauth
++      omniauth-oauth2
++
+ GIT
+   remote: https://github.com/zammad-deps/autodiscover
+   revision: ee9b53dfa797ce6d4f970b82beea7fbdd2df56bb
+@@ -643,6 +651,7 @@ DEPENDENCIES
+   mysql2
+   net-ldap
+   oauth2
++  omniauth-discord!
+   omniauth-facebook
+   omniauth-github
+   omniauth-gitlab
+diff --git a/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee b/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
+index 2a444dc01..221303151 100644
+--- a/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
++++ b/app/assets/javascripts/app/controllers/_profile/linked_accounts.coffee
+@@ -101,6 +101,11 @@ App.Config.set('auth_provider_all', {
+     name:   __('Weibo')
+     config: 'auth_weibo'
+     class:  'weibo'
++  discord:
++    url:    '/auth/discord'
++    name:   'Discord'
++    config: 'auth_discord'
++    class:  'discord'
+   saml:
+     url:    '/auth/saml'
+     name:   __('SAML')
+diff --git a/app/assets/javascripts/app/controllers/customer_ticket_create.coffee b/app/assets/javascripts/app/controllers/customer_ticket_create.coffee
+index 502325583..476969f4b 100644
+--- a/app/assets/javascripts/app/controllers/customer_ticket_create.coffee
++++ b/app/assets/javascripts/app/controllers/customer_ticket_create.coffee
+@@ -86,13 +86,6 @@ class CustomerTicketCreate extends App.ControllerAppContent
+         params:         defaults
+       )
+ 
+-    new App.ControllerDrox(
+-      el:   @el.find('.sidebar')
+-      data:
+-        header: App.i18n.translateInline('What can you do here?')
+-        html:   App.i18n.translateInline('The way to communicate with us is this thing called "ticket".') + ' ' + App.i18n.translateInline('Here you can create one.')
+-    )
+-
+   cancel: ->
+     @navigate '#'
+ 
+diff --git a/app/assets/javascripts/app/lib/base/html5Upload.js b/app/assets/javascripts/app/lib/base/html5Upload.js
+index 72a2e455e..5dfc888b6 100644
+--- a/app/assets/javascripts/app/lib/base/html5Upload.js
++++ b/app/assets/javascripts/app/lib/base/html5Upload.js
+@@ -161,7 +161,11 @@
+             for (i = 0; i < len; i += 1) {
+                 file = files[i];
+                 if (file.size === 0) {
+-                    alert('Files with files size zero cannot be uploaded or multiple file uploads are not supported by your browser');
++                    alert('Error: Files with size zero cannot be uploaded or multiple file uploads are not supported by your browser');
++                    break;
++                }
++                if (file.size > 5000000) {
++                    alert('Error: File exceeds max attachment size (5MB)');
+                     break;
+                 }
+ 
+diff --git a/app/assets/javascripts/app/views/customer_not_ticket_exists.jst.eco b/app/assets/javascripts/app/views/customer_not_ticket_exists.jst.eco
+index 358eca5d4..4438698f7 100644
+--- a/app/assets/javascripts/app/views/customer_not_ticket_exists.jst.eco
++++ b/app/assets/javascripts/app/views/customer_not_ticket_exists.jst.eco
+@@ -7,9 +7,8 @@
+           <p><%- @T('You have no tickets to display in this overview.') %></p>
+         <% else: %>
+           <% if @is_allowed_to_create_ticket: %>
+-            <p><%- @T('You have not created a ticket yet.') %></p>
+-            <p><%- @T('The way to communicate with us is this thing called "ticket".') %></p>
+-            <p><%- @T('Please click on the button below to create your first one.') %></p>
++            <p><%- @T('You have not yet created any tickets with us.') %></p>
++            <p><%- @T('Please click the green plus (+) in the bottom left or the blue button below to get started.') %></p>
+ 
+             <p><a class="btn btn--primary" href="#customer_ticket_new"><%- @T('Create your first ticket') %></a></p>
+           <% else: %>
+diff --git a/app/assets/javascripts/app/views/customer_ticket_create.jst.eco b/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
+index 2ab383135..2846661cb 100644
+--- a/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
++++ b/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
+@@ -3,21 +3,48 @@
+     <div class="newTicket">
+       <div class="box box--newTicket">
+         <div class="page-header">
+-          <h1><%- @T('New Ticket') %></h1>
++          <h1><%- @T('New Ticket') %> <small><%- @T('Send a message to staff!') %></small></h1>
+         </div>
+ 
+         <div class="page-content">
++          <p>
++            <%- @T('If you need help with modding your game, please use either the #pc-help or #quest-help channel in the ') %>
++            <a href="https://discord.gg/beatsabermods"><%- @T('BSMG Server') %></a>
++            <br><br>
++            <%- @T('For issues relating to the BeastSaber Website, please contact them in the ') %>
++            <a href="https://discord.gg/VJZHUbt"><%- @T('BeastSaber Discord') %></a>
++            <br><br>
++            <%- @T('For issues relating to the BeatSaver Website, please contact them in the ') %>
++            <a href="https://discord.gg/rjVDapkMmj"><%- @T('BeatSaver Discord') %></a>
++            <br><br>
++            <%- @T('To obtain a User ID, check out this ') %>
++            <a href="https://support.discord.com/hc/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-"><%- @T('Discord Support Article') %></a>
++            <%- @T(' on how to find/enable this feature.') %>
++            <br><br>
++            <%- @T('If you are contacting us to appeal a Ban or Mute, keep in mind it may take 3 to 5 weeks or more for your appeal to be processed.') %>
++            <br><br>
++            <%- @T('Community and Regional Hub Applicants: Remember the hubs are not just an advertising space. They are to showcase community servers that can “stand on their own” and not rely on the traffic BSMG can bring.') %>
++            <br><br>
++            <%- @T('We may reach out to you about your ticket through Discord. Please allow Direct Messages in the BSMG server or keep an eye out for a friend request from a ') %>
++            <a href="https://bsmg.wiki/about/staff.html"><%- @T('BSMG Staff Member') %></a>
++            <%- @T(' or ') %>
++            <a href="https://bsmg.wiki/about/moderators.html"><%- @T('Moderator') %></a>
++            <br><br>
++          </p>
++        
+           <form role="form" class="ticket-create" autocomplete="off">
+             <input type="hidden" name="form_id" value="<%= @form_id %>"/>
+ 
+             <div class="ticket-form-top"></div>
+-            <div class="article-form-top"></div>
+ 
+             <div class="formset-inset">
+               <div class="ticket-form-middle horizontal two-columns"></div>
+               <div class="ticket-form-bottom"></div>
+             </div>
+ 
++            <p><%- @T("Enter your message and/or attach additional information in the field below.") %></p>
++            <div class="article-form-top"></div>
++
+             <div class="form-controls">
+               <a class="btn btn--text btn--subtle js-cancel" href="#/"><%- @T('Cancel & Go Back') %></a>
+               <button type="submit" class="btn btn--success js-submit align-right"><%- @T('Create') %></button>
+@@ -28,5 +55,3 @@
+     </div>
+   </div>
+ </div>
+-
+-<div class="sidebar"></div>
+diff --git a/app/assets/javascripts/app/views/login.jst.eco b/app/assets/javascripts/app/views/login.jst.eco
+index 804c021ed..fe49e9998 100644
+--- a/app/assets/javascripts/app/views/login.jst.eco
++++ b/app/assets/javascripts/app/views/login.jst.eco
+@@ -1,10 +1,8 @@
+ <div class="login fullscreen">
+   <div class="fullscreen-center">
+     <div class="fullscreen-body">
+-      <p><%- @T('Log in to %s', @C('fqdn')) %></p>
+-
+       <% if @C('maintenance_mode'): %>
+-        <div class="hero-unit alert alert--danger js-maintenanceMode"><%- @T('Zammad is currently in maintenance mode. Only administrators can log in. Please wait until the maintenance window is over.') %></div>
++        <div class="hero-unit alert alert--danger js-maintenanceMode"><%- @T('System is currently in maintenance mode. Only administrators can login. Please wait until the maintenance window is over.') %></div>
+       <% end %>
+       <% if @C('maintenance_login') && @C('maintenance_login_message'): %>
+         <div class="hero-unit alert alert--success js-maintenanceLogin"><%- @C('maintenance_login_message') %></div>
+@@ -12,6 +10,26 @@
+ 
+       <div class="hero-unit">
+         <img class="company-logo" src="<%= @logoUrl %>" alt="<%= @C('product_name') %>">
++        <% if !_.isEmpty(@auth_providers): %>
++          <div class="separator">
++            <span class="separator-text"><%- @T('welcome! to get started, sign in using') %></span>
++          </div>
++
++          <div class="auth-providers">
++            <% for auth_provider in @auth_providers: %>
++              <form method="post" action="<%= auth_provider.url %>">
++                <input type="hidden" name="authenticity_token" value="<%= Spine.Ajax.defaults.headers['X-CSRF-Token'] %>">
++                <button type="submit" class="auth-provider auth-provider--<%= auth_provider.class %>">
++                  <%- @Icon("#{auth_provider.class}-button", 'provider-icon') %>
++                  <span class="provider-name"><%- @T(auth_provider.name) %></span>
++                </button>
++              </form>
++            <% end %>
++          </div>
++          <div class="separator">
++            <span class="separator-text"><%- @T('administrators') %></span>
++          </div>
++        <% end %>
+         <form id="login">
+           <% if @item.errorMessage: %>
+             <div class="alert alert--danger" role="alert">
+@@ -21,7 +39,7 @@
+ 
+           <div class="form-group">
+             <div class="formGroup-label">
+-              <label for="username"><%- @Ti('Username / email') %></label>
++              <label for="username"><%- @Ti('Admin Username') %></label>
+             </div>
+             <input id="username" name="username" type="text" class="form-control" value="<%= @item.username %>" autocapitalize="off" />
+           </div>
+@@ -55,27 +73,9 @@
+           </div>
+ 
+         </form>
+-        <% if !_.isEmpty(@auth_providers): %>
+-          <div class="separator">
+-            <span class="separator-text"><%- @T('or sign in using') %></span>
+-          </div>
+-
+-          <div class="auth-providers">
+-            <% for auth_provider in @auth_providers: %>
+-              <form method="post" action="<%= auth_provider.url %>">
+-                <input type="hidden" name="authenticity_token" value="<%= Spine.Ajax.defaults.headers['X-CSRF-Token'] %>">
+-                <button type="submit" class="auth-provider auth-provider--<%= auth_provider.class %>">
+-                  <%- @Icon("#{auth_provider.class}-button", 'provider-icon') %>
+-                  <span class="provider-name"><%- @T(auth_provider.name) %></span>
+-                </button>
+-              </form>
+-            <% end %>
+-          </div>
+-        <% end %>
+       </div>
+ 
+       <p>
+-        <%- @T("You're already registered with your email address if you've been in touch with our Support team.") %><br>
+         <% if @C('user_lost_password'): %>
+           <%- @T('You can request your password') %> <a href="#password_reset"><%- @T('here') %></a>.
+         <% end %>
+diff --git a/app/assets/stylesheets/svg-dimensions.css b/app/assets/stylesheets/svg-dimensions.css
+index dae5b70ec..9214db4ef 100644
+--- a/app/assets/stylesheets/svg-dimensions.css
++++ b/app/assets/stylesheets/svg-dimensions.css
+@@ -138,5 +138,6 @@
+ .icon-user { width: 16px; height: 16px; }
+ .icon-web { width: 17px; height: 17px; }
+ .icon-weibo-button { width: 29px; height: 24px; }
++.icon-discord-button { width: 71px; height: 55px; }
+ .icon-zoom-in { width: 20px; height: 20px; }
+ .icon-zoom-out { width: 20px; height: 20px; }
+\ No newline at end of file
+diff --git a/app/assets/stylesheets/zammad.scss b/app/assets/stylesheets/zammad.scss
+index 64e4eccd8..003bca175 100644
+--- a/app/assets/stylesheets/zammad.scss
++++ b/app/assets/stylesheets/zammad.scss
+@@ -3,7 +3,7 @@ $good-color: hsl(62, 45%, 46%);
+ $ok-color: hsl(41, 100%, 49%);
+ $bad-color: hsl(30, 93%, 50%);
+ $superbad-color: hsl(19, 90%, 51%);
+-$ghost-color: hsl(0, 0%, 80%);
++$ghost-color: rgb(100, 100, 100);
+ $danger-color: hsl(0, 65%, 55%);
+ $task-state-closed-color: $supergood-color;
+ $task-state-pending-color: hsl(206, 7%, 28%);
+@@ -98,11 +98,11 @@ p {
+   margin: 12px 0;
+ 
+   &.subtle {
+-    color: hsl(60, 1%, 74%);
++    color: rgb(88, 88, 88);
+   }
+ 
+   &.description {
+-    color: hsl(190, 2%, 74%);
++    color: rgb(126, 126, 126);
+   }
+ }
+ 
+@@ -119,7 +119,7 @@ strong {
+ }
+ 
+ .text-muted {
+-  color: hsl(60, 1%, 74%);
++  color: rgb(56, 56, 56);
+ }
+ 
+ .text-small {
+@@ -167,7 +167,7 @@ a.create {
+ }
+ 
+ small {
+-  color: hsl(198, 4%, 56%);
++  color: rgb(70, 72, 73);
+   font-size: 12px;
+ }
+ 
+@@ -440,7 +440,7 @@ pre code {
+ .form-control::placeholder,
+ .token-input::placeholder,
+ .u-placeholder {
+-  color: hsl(0, 0%, 80%);
++  color: #949494;
+ }
+ 
+ .btn {
+@@ -754,10 +754,10 @@ pre code {
+ 
+     &.btn--subtle {
+       text-decoration: underline;
+-      color: hsl(0, 0%, 85%);
++      color: rgb(119, 119, 119);
+ 
+       &:active {
+-        color: hsl(0, 0%, 75%);
++        color: rgb(83, 83, 83);
+       }
+     }
+ 
+@@ -1226,7 +1226,7 @@ pre code {
+     font-weight: inherit;
+     text-align: inherit;
+     line-height: inherit;
+-    color: #d0d2d3;
++    color: #4D595B;
+     background: none;
+     border-radius: 0;
+     vertical-align: baseline;
+@@ -1746,7 +1746,7 @@ label,
+ .checkbox.form-group label,
+ .label {
+   text-transform: uppercase;
+-  color: hsl(198, 15%, 69%);
++  color: #4D595B;
+   display: block;
+   font-size: 13px;
+   font-weight: normal;
+@@ -2312,7 +2312,7 @@ textarea.form-control {
+ 
+ select.form-control:not([multiple]) {
+   @include bidi-style(padding-right, 34px, padding-left, 12px);
+-
++  max-width: 340px;
+   word-wrap: normal;
+ }
+ 
+@@ -3031,12 +3031,12 @@ kbd {
+ .page-content {
+   .formGroup-label label,
+   .label {
+-    color: hsl(197, 18%, 70%);
++    color: #4D595B;
+   }
+ 
+   .help-text,
+   .help-block {
+-    color: hsl(198, 19%, 72%);
++    color: #4D595B;
+   }
+ 
+   .content-controls-align-right {
+@@ -3304,8 +3304,8 @@ ol.tabs li {
+   display: flex;
+   padding: 0;
+   margin-bottom: 20px;
+-  color: #b8b8b8;
+-  border: 1px solid rgba(0, 8, 14, 0.08);
++  color: #595959;
++  border: 1px solid #595959;
+   border-radius: 3px;
+   background: white;
+ 
+@@ -3331,7 +3331,7 @@ ol.tabs li {
+   display: flex;
+   justify-content: center;
+   align-items: center;
+-  border-right: 1px solid rgba(0, 8, 14, 0.08);
++  border-right: 1px solid #595959;
+   min-width: 0;
+   flex-grow: 1;
+ 
+@@ -3588,6 +3588,10 @@ ol.tabs li {
+     background: hsl(0, 0%, 27%);
+   }
+ 
++  &.auth-provider--discord {
++    background: #5865F2;
++  }
++
+   &.auth-provider--saml {
+     background: hsl(0, 0%, 27%);
+   }
+@@ -4311,7 +4315,7 @@ footer {
+ .menu-item {
+   padding: 0 15px;
+   height: 48px;
+-  color: rgba(240, 250, 255, 0.25);
++  color: #FFFFFF;
+   border-bottom: 1px solid rgba(240, 250, 255, 0.05);
+   text-decoration: none;
+   display: flex;
+@@ -4400,7 +4404,7 @@ footer {
+ 
+   width: 24px;
+   height: 24px;
+-  fill: hsl(206, 7%, 37%);
++  fill: #FFFFFF;
+ 
+   @include phone {
+     @include bidi-style(margin-right, 0, margin-left, 0);
+@@ -4528,7 +4532,7 @@ footer {
+   @include bidi-style(padding, 10px 15px 9px 0, padding, 10px 0 9px 15px);
+ 
+   position: relative;
+-  color: #808080;
++  color: #FFFFFF;
+   display: flex;
+   align-items: center;
+ 
+@@ -5405,7 +5409,7 @@ li.add .dropdown-nose {
+   position: relative;
+   width: 280px;
+   padding: 20px;
+-  color: hsl(60, 1%, 34%);
++  color: rgb(90, 90, 90);
+   background: white;
+ 
+   @include bidi-style(border-right, 1px solid #e6e6e6, border-left, none);
+@@ -5608,7 +5612,7 @@ li.add .dropdown-nose {
+ 
+ a.list-group-item.active > .badge,
+ .nav-pills > .active > a > .badge {
+-  color: #96969b;
++  color: currentColor;
+   background: none;
+ }
+ 
+@@ -6055,7 +6059,7 @@ a.list-group-item.active > .badge,
+ }
+ 
+ .stat-detail {
+-  color: #b4b7b9;
++  color: #595959;
+ 
+   @extend .u-textTruncate;
+ }
+@@ -6378,8 +6382,8 @@ a.list-group-item.active > .badge,
+   width: 3px;
+   background: repeating-linear-gradient(
+       45deg,
+-      hsl(193, 18%, 90%),
+-      hsl(193, 18%, 90%) 5px,
++      #db700b,
++      #db700b 5px,
+       transparent 5px,
+       transparent 9px
+     )
+@@ -6396,20 +6400,19 @@ a.list-group-item.active > .badge,
+ }
+ 
+ .form-group.is-changed label {
+-  color: hsl(198, 19%, 72%);
+   position: relative;
+ }
+ 
+ .form-group.is-changed label::before {
+   position: absolute;
+   content: '';
+-  left: -10px;
+-  width: 5px;
+-  height: 5px;
+-  top: 50%;
+-  margin-top: -3px;
++  left: 5px;
++  width: 230px;
++  height: 2px;
++  top: 100%;
++  margin-top: -1px;
+   border-radius: 100%;
+-  background: hsl(198, 19%, 72%);
++  background: #db700b;
+ }
+ 
+ .form-inline .form-group .btn {
+@@ -7836,7 +7839,7 @@ a.list-group-item.active > .badge,
+   top: 50%;
+   margin-top: -3px;
+   border-radius: 100%;
+-  background: hsl(198, 19%, 72%);
++  background: #db700b;
+   box-shadow: 0 0 0 2px hsl(210, 17%, 98%);
+ }
+ 
+@@ -7858,15 +7861,15 @@ a.list-group-item.active > .badge,
+ .tabsSidebar-tab .icon {
+   width: 24px;
+   height: 24px;
+-  fill: hsl(197, 19%, 78%);
++  fill: #585b5e;
+ }
+ 
+ .tabsSidebar-tab.active {
+   .tabsSidebar-tab-count {
+-    background: hsl(206, 7%, 37%);
++    background: #1d85db;
+ 
+     &::after {
+-      border-right-color: hsl(206, 7%, 37%);
++      border-right-color: #1d85db;
+     }
+ 
+     &.tabsSidebar-tab-count--info {
+@@ -7907,7 +7910,7 @@ a.list-group-item.active > .badge,
+   }
+ 
+   .icon {
+-    fill: hsl(206, 7%, 37%);
++    fill: #1d85db;
+   }
+ }
+ 
+@@ -7915,7 +7918,7 @@ a.list-group-item.active > .badge,
+   position: absolute;
+   left: 9px;
+   top: 5px;
+-  background: hsl(197, 19%, 78%);
++  background: #585b5e;
+   width: 16px;
+   height: 13px;
+   text-align: center;
+@@ -7947,7 +7950,7 @@ a.list-group-item.active > .badge,
+     top: 100%;
+     right: 20%;
+     border-bottom: 3px solid transparent;
+-    border-right: 5px solid hsl(197, 19%, 78%);
++    border-right: 5px solid #585b5e;
+   }
+ 
+   &.tabsSidebar-tab-count--info {
+@@ -7988,7 +7991,7 @@ a.list-group-item.active > .badge,
+ }
+ 
+ .sidebar .text-muted {
+-  color: hsl(198, 22%, 82%);
++  color: #242a2b;
+ }
+ 
+ .alert {
+@@ -8388,7 +8391,7 @@ a.list-group-item.active > .badge,
+ .type-tabs .tab-icon {
+   width: 17px;
+   height: 17px;
+-  fill: #ccc;
++  fill: #595959;
+   vertical-align: top;
+ 
+   @include bidi-style(margin-right, 9px, margin-left, 0);
+@@ -8531,7 +8534,7 @@ a.list-group-item.active > .badge,
+ }
+ 
+ .drox {
+-  color: hsl(60, 1%, 74%);
++  color: hsl(0, 0%, 38%);
+ }
+ 
+ .drox .drox-header {
+@@ -9518,7 +9521,7 @@ li.dropdown-header {
+ 
+ .nav-tabs li {
+   margin: 0;
+-  color: hsl(0, 0%, 70%);
++  color: #595959;
+   border: 1px solid hsl(0, 0%, 90%);
+   margin-left: -1px;
+   background: white;
+diff --git a/config/initializers/omniauth.rb b/config/initializers/omniauth.rb
+index 1455d89b7..c8ea359d1 100644
+--- a/config/initializers/omniauth.rb
++++ b/config/initializers/omniauth.rb
+@@ -48,6 +48,9 @@ Rails.application.config.middleware.use OmniAuth::Builder do
+   # weibo database connect
+   provider :weibo_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database'
+ 
++  # discord database connect
++  provider :discord_database, 'not_change_will_be_set_by_database', 'not_change_will_be_set_by_database', scope: 'identify'
++
+   # SAML database connect
+   provider :saml_database
+ end
+diff --git a/contrib/nginx/zammad.conf b/contrib/nginx/zammad.conf
+index 14a8d3903..81e5752dc 100644
+--- a/contrib/nginx/zammad.conf
++++ b/contrib/nginx/zammad.conf
+@@ -25,7 +25,7 @@ server {
+     access_log /var/log/nginx/zammad.access.log;
+     error_log  /var/log/nginx/zammad.error.log;
+ 
+-    client_max_body_size 50M;
++    client_max_body_size 25M;
+ 
+     location ~ ^/(assets/|robots.txt|humans.txt|favicon.ico|apple-touch-icon.png) {
+         expires max;
+diff --git a/contrib/nginx/zammad_ssl.conf b/contrib/nginx/zammad_ssl.conf
+index a8d18cfd6..be3312dde 100644
+--- a/contrib/nginx/zammad_ssl.conf
++++ b/contrib/nginx/zammad_ssl.conf
+@@ -82,7 +82,7 @@ server {
+   access_log /var/log/nginx/zammad.access.log;
+   error_log  /var/log/nginx/zammad.error.log;
+ 
+-  client_max_body_size 50M;
++  client_max_body_size 25M;
+ 
+   location ~ ^/(assets/|robots.txt|humans.txt|favicon.ico|apple-touch-icon.png) {
+     expires max;
+diff --git a/db/migrate/20211008110047_discord.rb b/db/migrate/20211008110047_discord.rb
+new file mode 100644
+index 000000000..dc6eabcea
+--- /dev/null
++++ b/db/migrate/20211008110047_discord.rb
+@@ -0,0 +1,63 @@
++class Discord < ActiveRecord::Migration[4.2]
++    def up
++  
++      # return if it's a new setup
++      return if !Setting.find_by(name: 'system_init_done')
++      Setting.create_if_not_exists(
++        title:       'Authentication via %s',
++        name:        'auth_discord',
++        area:        'Security::ThirdPartyAuthentication',
++        description: 'Enables user authentication via %s. Register your app first at [%s](%s).',
++        options:     {
++          form: [
++            {
++              display: '',
++              null:    true,
++              name:    'auth_discord',
++              tag:     'boolean',
++              options: {
++                true  => 'yes',
++                false => 'no',
++              },
++            },
++          ],
++        },
++        preferences: {
++          controller:       'SettingsAreaSwitch',
++          sub:              ['auth_discord_credentials'],
++          title_i18n:       ['Discord'],
++          description_i18n: ['Discord', 'Discord Developer Portal', 'https://discord.com/developers/applications'],
++          permission:       ['admin.security'],
++        },
++        state:       false,
++        frontend:    true
++      )
++    Setting.create_if_not_exists(
++      title:       'Discord App Credentials',
++      name:        'auth_discord_credentials',
++      area:        'Security::ThirdPartyAuthentication::Discord',
++      description: 'Enables user authentication via Discord.',
++      options:     {
++        form: [
++          {
++            display: 'Client ID',
++            null:    true,
++            name:    'client_id',
++            tag:     'input',
++          },
++          {
++            display: 'Client Secret',
++            null:    true,
++            name:    'client_secret',
++            tag:     'input',
++          },
++        ],
++      },
++      state:       {},
++      preferences: {
++        permission: ['admin.security'],
++      },
++      frontend:    false
++    )
++    end
++  end
+\ No newline at end of file
+diff --git a/db/seeds/settings.rb b/db/seeds/settings.rb
+index 63c673c03..d50c9f2e0 100644
+--- a/db/seeds/settings.rb
++++ b/db/seeds/settings.rb
+@@ -1790,6 +1790,62 @@ Setting.create_if_not_exists(
+   },
+   frontend:    false
+ )
++Setting.create_if_not_exists(
++  title:       'Authentication via %s',
++  name:        'auth_discord',
++  area:        'Security::ThirdPartyAuthentication',
++  description: 'Enables user authentication via %s. Register your app first at [%s](%s).',
++  options:     {
++    form: [
++      {
++        display: '',
++        null:    true,
++        name:    'auth_discord',
++        tag:     'boolean',
++        options: {
++          true  => 'yes',
++          false => 'no',
++        },
++      },
++    ],
++  },
++  preferences: {
++    controller:       'SettingsAreaSwitch',
++    sub:              ['auth_discord_credentials'],
++    title_i18n:       ['Discord'],
++    description_i18n: ['Discord', 'Discord Developer Portal', 'https://discord.com/developers/applications'],
++    permission:       ['admin.security'],
++  },
++  state:       false,
++  frontend:    true
++)
++Setting.create_if_not_exists(
++  title:       'Discord App Credentials',
++  name:        'auth_discord_credentials',
++  area:        'Security::ThirdPartyAuthentication::Discord',
++  description: 'Enables user authentication via Discord.',
++  options:     {
++    form: [
++      {
++        display: 'Client ID',
++        null:    true,
++        name:    'client_id',
++        tag:     'input',
++      },
++      {
++        display: 'Client Secret',
++        null:    true,
++        name:    'client_secret',
++        tag:     'input',
++      },
++    ],
++  },
++  state:       {},
++  preferences: {
++    permission: ['admin.security'],
++  },
++  frontend:    false
++)
+ Setting.create_if_not_exists(
+   title:       __('Authentication via %s'),
+   name:        'auth_saml',
+diff --git a/lib/omniauth/discord_database.rb b/lib/omniauth/discord_database.rb
+new file mode 100644
+index 000000000..7bc93088d
+--- /dev/null
++++ b/lib/omniauth/discord_database.rb
+@@ -0,0 +1,13 @@
++class DiscordDatabase < OmniAuth::Strategies::Discord
++    option :name, 'discord'
++  
++    def initialize(app, *args, &block)
++  
++      # database lookup
++      config  = Setting.get('auth_discord_credentials') || {}
++      args[0] = config['client_id']
++      args[1] = config['client_secret']
++      super
++    end
++  
++  end
+\ No newline at end of file
+diff --git a/public/assets/images/icons.svg b/public/assets/images/icons.svg
+index c72f4aac5..b79684ec3 100644
+--- a/public/assets/images/icons.svg
++++ b/public/assets/images/icons.svg
+@@ -964,4 +964,11 @@
+         <path d="M5 7v2h6V7z"/>
+         <path d="M7.893 13.843a5.918 5.918 0 0 1-5.872-5.949c.024-3.236 2.67-5.871 5.908-5.871h.04a5.854 5.854 0 0 1 4.16 1.759 5.875 5.875 0 0 1 1.704 4.19 5.887 5.887 0 0 1-1.744 4.154 5.86 5.86 0 0 1-4.157 1.717h-.039M7.977 0h-.05C3.575 0 .029 3.517 0 7.882c-.024 4.382 3.497 7.956 7.876 7.984h.056a7.846 7.846 0 0 0 3.988-1.08l4.817 4.823.123.117a.926.926 0 0 0 1.317 0l1.552-1.549a.936.936 0 0 0 0-1.32l-.12-.124-4.825-4.825a7.864 7.864 0 0 0 1.07-3.924A7.927 7.927 0 0 0 7.976 0"/>
+     </g>
++</symbol><symbol id="icon-discord-button" viewBox="0 0 71 55">
++    <title>
++        icon-discord-button
++    </title>
++    <g fill-rule="nonzero" fill="#fff">
+++       <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" />
+++   </g>
+ </symbol></svg>
+\ No newline at end of file
+diff --git a/public/assets/images/icons/discord-button.svg b/public/assets/images/icons/discord-button.svg
+new file mode 100644
+index 000000000..2cef07721
+--- /dev/null
++++ b/public/assets/images/icons/discord-button.svg
+@@ -0,0 +1,23 @@
++<svg width="292" height="80" viewBox="0 0 292 80" fill="none" xmlns="http://www.w3.org/2000/svg">
++<g clip-path="url(#clip0)">
++<g clip-path="url(#clip1)">
++<path d="M61.7958 16.494C57.0736 14.2846 52.0244 12.6789 46.7456 11.7646C46.0973 12.9367 45.3399 14.5132 44.8177 15.7673C39.2062 14.9234 33.6463 14.9234 28.138 15.7673C27.6159 14.5132 26.8413 12.9367 26.1872 11.7646C20.9027 12.6789 15.8477 14.2905 11.1255 16.5057C1.60078 30.8988 -0.981215 44.9344 0.309785 58.7707C6.62708 63.4883 12.7493 66.3541 18.7682 68.2294C20.2543 66.1841 21.5797 64.0099 22.7215 61.7185C20.5469 60.8922 18.4641 59.8725 16.4961 58.6887C17.0182 58.3019 17.5289 57.8975 18.0223 57.4814C30.0257 63.0957 43.0677 63.0957 54.9277 57.4814C55.4269 57.8975 55.9375 58.3019 56.4539 58.6887C54.4801 59.8783 52.3916 60.898 50.217 61.7244C51.3588 64.0099 52.6785 66.19 54.1703 68.2352C60.195 66.3599 66.3229 63.4942 72.6402 58.7707C74.155 42.7309 70.0525 28.8242 61.7958 16.494ZM24.3568 50.2615C20.7535 50.2615 17.7985 46.8976 17.7985 42.8012C17.7985 38.7048 20.6904 35.3351 24.3568 35.3351C28.0233 35.3351 30.9782 38.6989 30.9151 42.8012C30.9208 46.8976 28.0233 50.2615 24.3568 50.2615ZM48.5932 50.2615C44.9899 50.2615 42.0349 46.8976 42.0349 42.8012C42.0349 38.7048 44.9267 35.3351 48.5932 35.3351C52.2596 35.3351 55.2146 38.6989 55.1515 42.8012C55.1515 46.8976 52.2596 50.2615 48.5932 50.2615Z" fill="white"/>
++<path d="M98.0293 26.1707H113.693C117.469 26.1707 120.659 26.7743 123.276 27.9757C125.886 29.177 127.843 30.8531 129.14 32.998C130.436 35.1429 131.09 37.5984 131.09 40.3645C131.09 43.072 130.413 45.5275 129.059 47.7251C127.705 49.9286 125.645 51.6692 122.874 52.9526C120.103 54.236 116.671 54.8806 112.569 54.8806H98.0293V26.1707ZM112.408 47.5845C114.95 47.5845 116.907 46.934 118.272 45.6388C119.638 44.3378 120.321 42.568 120.321 40.3235C120.321 38.243 119.712 36.5845 118.496 35.3421C117.28 34.0997 115.438 33.4727 112.976 33.4727H108.076V47.5845H112.408Z" fill="white"/>
++<path d="M154.541 54.8456C152.372 54.2713 150.415 53.4391 148.677 52.3432V45.5335C149.991 46.5707 151.752 47.4264 153.961 48.1003C156.17 48.7684 158.305 49.1024 160.37 49.1024C161.334 49.1024 162.063 48.9735 162.556 48.7156C163.05 48.4578 163.297 48.1472 163.297 47.7897C163.297 47.3795 163.165 47.0396 162.895 46.7641C162.625 46.4887 162.103 46.2601 161.329 46.0667L156.509 44.9591C153.749 44.3028 151.792 43.3944 150.628 42.2282C149.463 41.0678 148.883 39.5441 148.883 37.6571C148.883 36.0689 149.388 34.6918 150.41 33.5138C151.425 32.3359 152.871 31.4275 154.747 30.7887C156.624 30.1441 158.815 29.8218 161.334 29.8218C163.583 29.8218 165.643 30.0679 167.52 30.5602C169.396 31.0525 170.945 31.6795 172.179 32.4472V38.8878C170.916 38.1201 169.47 37.5165 167.818 37.0593C166.171 36.6081 164.479 36.3854 162.734 36.3854C160.215 36.3854 158.959 36.8249 158.959 37.6981C158.959 38.1084 159.154 38.4131 159.544 38.6182C159.934 38.8233 160.651 39.0343 161.69 39.257L165.706 39.9954C168.329 40.4584 170.285 41.273 171.57 42.4333C172.856 43.5937 173.498 45.3108 173.498 47.5846C173.498 50.0752 172.437 52.0502 170.308 53.5153C168.179 54.9804 165.161 55.7129 161.248 55.7129C158.947 55.7071 156.71 55.4199 154.541 54.8456Z" fill="white"/>
++<path d="M182.978 53.9839C180.678 52.8352 178.939 51.2764 177.78 49.3073C176.621 47.3382 176.036 45.123 176.036 42.6616C176.036 40.2003 176.638 37.9968 177.843 36.057C179.048 34.1172 180.815 32.5935 183.145 31.4859C185.474 30.3783 188.257 29.8274 191.499 29.8274C195.515 29.8274 198.849 30.6889 201.5 32.4118V39.919C200.565 39.2626 199.474 38.7293 198.229 38.3191C196.984 37.9089 195.653 37.7037 194.23 37.7037C191.74 37.7037 189.795 38.1667 188.389 39.0985C186.983 40.0303 186.278 41.2434 186.278 42.7495C186.278 44.2263 186.96 45.4336 188.326 46.383C189.692 47.3265 191.671 47.8012 194.27 47.8012C195.607 47.8012 196.927 47.6019 198.229 47.2093C199.526 46.8108 200.645 46.3244 201.58 45.75V53.011C198.637 54.816 195.223 55.7185 191.338 55.7185C188.068 55.7068 185.279 55.1325 182.978 53.9839Z" fill="white"/>
++<path d="M211.518 53.9841C209.2 52.8355 207.433 51.2649 206.216 49.2665C205 47.2681 204.386 45.0412 204.386 42.5798C204.386 40.1185 204.994 37.9208 206.216 35.9928C207.438 34.0647 209.194 32.5527 211.501 31.4568C213.801 30.3609 216.55 29.8159 219.734 29.8159C222.919 29.8159 225.667 30.3609 227.968 31.4568C230.269 32.5527 232.025 34.053 233.23 35.9693C234.435 37.8857 235.037 40.0833 235.037 42.574C235.037 45.0353 234.435 47.2623 233.23 49.2606C232.025 51.259 230.263 52.8296 227.945 53.9782C225.627 55.1269 222.89 55.7012 219.729 55.7012C216.567 55.7012 213.83 55.1327 211.518 53.9841ZM223.722 46.7055C224.698 45.7093 225.191 44.3907 225.191 42.7498C225.191 41.1089 224.703 39.802 223.722 38.835C222.747 37.8622 221.415 37.3758 219.729 37.3758C218.013 37.3758 216.67 37.8622 215.689 38.835C214.714 39.8079 214.226 41.1089 214.226 42.7498C214.226 44.3907 214.714 45.7093 215.689 46.7055C216.665 47.7018 218.013 48.2058 219.729 48.2058C221.415 48.1999 222.747 47.7018 223.722 46.7055Z" fill="white"/>
++<path d="M259.17 31.3395V40.2004C258.149 39.5147 256.829 39.1748 255.194 39.1748C253.053 39.1748 251.401 39.8371 250.253 41.1615C249.1 42.486 248.526 44.5488 248.526 47.3383V54.8865H238.686V30.8883H248.326V38.5185C248.859 35.7289 249.726 33.672 250.919 32.3416C252.107 31.0172 253.644 30.355 255.515 30.355C256.932 30.355 258.149 30.6832 259.17 31.3395Z" fill="white"/>
++<path d="M291.864 25.3503V54.8866H282.023V49.5127C281.191 51.5345 279.929 53.0758 278.231 54.1306C276.532 55.1797 274.432 55.7071 271.942 55.7071C269.716 55.7071 267.777 55.1562 266.118 54.0486C264.46 52.941 263.181 51.4232 262.28 49.4951C261.385 47.567 260.931 45.387 260.931 42.9491C260.903 40.435 261.379 38.1787 262.36 36.1803C263.336 34.1819 264.718 32.6231 266.497 31.5037C268.276 30.3844 270.307 29.8218 272.585 29.8218C277.273 29.8218 280.417 31.9022 282.023 36.0572V25.3503H291.864ZM280.555 46.5415C281.559 45.5452 282.058 44.2501 282.058 42.6678C282.058 41.1382 281.57 39.8899 280.595 38.9347C279.619 37.9795 278.282 37.4989 276.601 37.4989C274.943 37.4989 273.618 37.9853 272.625 38.9581C271.632 39.931 271.139 41.1909 271.139 42.7498C271.139 44.3087 271.632 45.5804 272.625 46.5649C273.618 47.5494 274.926 48.0417 276.561 48.0417C278.219 48.0359 279.55 47.5377 280.555 46.5415Z" fill="white"/>
++<path d="M139.382 33.4432C142.091 33.4432 144.288 31.4281 144.288 28.9424C144.288 26.4567 142.091 24.4417 139.382 24.4417C136.672 24.4417 134.476 26.4567 134.476 28.9424C134.476 31.4281 136.672 33.4432 139.382 33.4432Z" fill="white"/>
++<path d="M134.472 36.5435C137.478 37.8679 141.208 37.9265 144.283 36.5435V55.0154H134.472V36.5435Z" fill="white"/>
++</g>
++</g>
++<defs>
++<clipPath id="clip0">
++<rect width="292" height="56.4706" fill="white" transform="translate(0 11.7646)"/>
++</clipPath>
++<clipPath id="clip1">
++<rect width="292" height="56.4706" fill="white" transform="translate(0 11.7646)"/>
++</clipPath>
++</defs>
++</svg>
+-- 
+2.31.1.windows.1
+
