@@ -1,0 +1,27 @@
+From 12a15e6824748c5a3359e035c970f02690f5e0cf Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Wed, 13 Apr 2022 19:31:04 -0400
+Subject: [PATCH] add privacy policy
+
+---
+ app/assets/javascripts/app/views/login.jst.eco | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/app/assets/javascripts/app/views/login.jst.eco b/app/assets/javascripts/app/views/login.jst.eco
+index fe49e9998..c593b94e4 100644
+--- a/app/assets/javascripts/app/views/login.jst.eco
++++ b/app/assets/javascripts/app/views/login.jst.eco
+@@ -87,6 +87,10 @@
+         <a href="#signup"><%- @T('Register as a new customer') %></a>
+       </p>
+     <% end %>
++    <hr>
++      <p>
++        <a href="https://contact.bsmg.dev/privacy"><%- @T('Privacy Policy') %></a>
++      </p>
+     </div>
+   </div>
+   <div class="poweredBy">
+-- 
+2.31.1.windows.1
+
