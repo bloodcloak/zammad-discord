@@ -1,0 +1,63 @@
+From 0104f8d47222764cf16f9cd345ee6087039f966c Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Sun, 17 Apr 2022 19:27:12 -0400
+Subject: [PATCH] Revise some bits of the agent ticket page
+
+---
+ .../javascripts/app/controllers/agent_ticket_create.coffee | 2 --
+ .../javascripts/app/views/agent_ticket_create.jst.eco      | 7 ++++++-
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/app/assets/javascripts/app/controllers/agent_ticket_create.coffee b/app/assets/javascripts/app/controllers/agent_ticket_create.coffee
+index 88f907e114..5d18c538a1 100644
+--- a/app/assets/javascripts/app/controllers/agent_ticket_create.coffee
++++ b/app/assets/javascripts/app/controllers/agent_ticket_create.coffee
+@@ -446,8 +446,6 @@ class App.TicketCreate extends App.Controller
+       taskKey: @taskKey
+     )
+ 
+-    $('#tags').tokenfield()
+-
+     @sidebarWidget = new App.TicketCreateSidebar(
+       el:           @sidebar
+       params:       @formDefault
+diff --git a/app/assets/javascripts/app/views/agent_ticket_create.jst.eco b/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
+index dacf7d5679..2deb6e96f4 100644
+--- a/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
++++ b/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
+@@ -7,6 +7,7 @@
+         </div>
+ 
+         <div class="page-content">
++          <p><%- @T("This field does not matter. You can leave as default Received Call.") %></p>
+           <% if !_.isEmpty(@availableTypes) && @availableTypes.length > 1: %>
+             <ul class="tabs type-tabs">
+               <% for type in @availableTypes: %>
+@@ -29,6 +30,7 @@
+             <input type="hidden" name="shared_draft_id" value="<%= @shared_draft_id %>"/>
+             <input type="hidden" name="form_id" value="<%= @form_id %>"/>
+             <div class="ticket-form-top"></div>
++            <p><%- @T("Enter your own username in the customer field!") %></p>
+             <div class="form-group js-securityOptions hide">
+               <div class="formGroup-label">
+                 <label for=""><%- @T('Security') %></label>
+@@ -42,12 +44,15 @@
+                 </span>
+               </div>
+             </div>
+-            <div class="article-form-top"></div>
++      
+             <div class="formset-inset">
+               <div class="ticket-form-middle horizontal two-columns"></div>
+               <div class="ticket-form-bottom"></div>
+             </div>
+ 
++            <p><%- @T("Tip: You can even paste images directly in this text field!") %></p>
++            <div class="article-form-top"></div>
++
+             <div class="form-controls">
+               <a class="btn btn--text btn--subtle js-cancel" href="#/"><%- @T('Cancel & Go Back') %></a>
+               <button type="submit" class="btn btn--success js-submit align-right"><%- @T('Create') %></button>
+-- 
+2.31.1.windows.1
+

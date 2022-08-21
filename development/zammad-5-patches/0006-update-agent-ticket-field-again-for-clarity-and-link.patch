@@ -1,0 +1,40 @@
+From 2581c716f7bd6be42d0fde9ca9ce74ec6cc8f9a9 Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Sun, 21 Aug 2022 17:40:01 -0400
+Subject: [PATCH] update agent ticket field again for clarity and link a user
+ guide
+
+---
+ .../javascripts/app/views/agent_ticket_create.jst.eco    | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/app/assets/javascripts/app/views/agent_ticket_create.jst.eco b/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
+index 2deb6e96f4..1a4e1dda09 100644
+--- a/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
++++ b/app/assets/javascripts/app/views/agent_ticket_create.jst.eco
+@@ -7,7 +7,12 @@
+         </div>
+ 
+         <div class="page-content">
+-          <p><%- @T("This field does not matter. You can leave as default Received Call.") %></p>
++          <p>
++            <%- @T('Need help creating a ticket or forget how to? You can review our ') %>
++            <a href="https://bsmg.dev/contactagentinterfaceguide"><%- @T('Agent Interface Guide') %></a>
++            <br><br>
++            <%- @T("This field does not matter. You can leave at the default option, Received Call.") %>
++          </p>
+           <% if !_.isEmpty(@availableTypes) && @availableTypes.length > 1: %>
+             <ul class="tabs type-tabs">
+               <% for type in @availableTypes: %>
+@@ -30,7 +35,7 @@
+             <input type="hidden" name="shared_draft_id" value="<%= @shared_draft_id %>"/>
+             <input type="hidden" name="form_id" value="<%= @form_id %>"/>
+             <div class="ticket-form-top"></div>
+-            <p><%- @T("Enter your own username in the customer field!") %></p>
++            <p><%- @T("Enter your own Discord User ID in the customer field and select your account. DO NOT use the create a new customer option!!!") %></p>
+             <div class="form-group js-securityOptions hide">
+               <div class="formGroup-label">
+                 <label for=""><%- @T('Security') %></label>
+-- 
+2.31.1.windows.1
+

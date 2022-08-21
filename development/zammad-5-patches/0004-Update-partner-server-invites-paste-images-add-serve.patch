@@ -1,0 +1,50 @@
+From de14c3988efdd915b5d1638b94b08538737439a3 Mon Sep 17 00:00:00 2001
+From: Bloodcloak <59000966+bloodcloak@users.noreply.github.com>
+Date: Sun, 17 Apr 2022 19:26:09 -0400
+Subject: [PATCH] Update partner server invites, paste images, add server role
+ apply
+
+---
+ .../app/views/customer_ticket_create.jst.eco           | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/app/assets/javascripts/app/views/customer_ticket_create.jst.eco b/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
+index 2846661cb5..a37bb15a39 100644
+--- a/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
++++ b/app/assets/javascripts/app/views/customer_ticket_create.jst.eco
+@@ -12,10 +12,10 @@
+             <a href="https://discord.gg/beatsabermods"><%- @T('BSMG Server') %></a>
+             <br><br>
+             <%- @T('For issues relating to the BeastSaber Website, please contact them in the ') %>
+-            <a href="https://discord.gg/VJZHUbt"><%- @T('BeastSaber Discord') %></a>
++            <a href="https://bsmg.dev/BeastSaber"><%- @T('BeastSaber Discord') %></a>
+             <br><br>
+             <%- @T('For issues relating to the BeatSaver Website, please contact them in the ') %>
+-            <a href="https://discord.gg/rjVDapkMmj"><%- @T('BeatSaver Discord') %></a>
++            <a href="https://bsmg.dev/BeatSaver"><%- @T('BeatSaver Discord') %></a>
+             <br><br>
+             <%- @T('To obtain a User ID, check out this ') %>
+             <a href="https://support.discord.com/hc/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-"><%- @T('Discord Support Article') %></a>
+@@ -25,6 +25,10 @@
+             <br><br>
+             <%- @T('Community and Regional Hub Applicants: Remember the hubs are not just an advertising space. They are to showcase community servers that can “stand on their own” and not rely on the traffic BSMG can bring.') %>
+             <br><br>
++            <%- @T('Server Role Applicants: Please visit the ') %>
++            <a href="https://bsmg.dev/roleappsguide"><%- @T('BSMG Role Applications Guide') %></a>
++            <%- @T(' for more information and steps on how to apply using this system.') %>
++            <br><br>
+             <%- @T('We may reach out to you about your ticket through Discord. Please allow Direct Messages in the BSMG server or keep an eye out for a friend request from a ') %>
+             <a href="https://bsmg.wiki/about/staff.html"><%- @T('BSMG Staff Member') %></a>
+             <%- @T(' or ') %>
+@@ -42,7 +46,7 @@
+               <div class="ticket-form-bottom"></div>
+             </div>
+ 
+-            <p><%- @T("Enter your message and/or attach additional information in the field below.") %></p>
++            <p><%- @T("Enter your message, paste images directly in the text box, and/or attach additional information below.") %></p>
+             <div class="article-form-top"></div>
+ 
+             <div class="form-controls">
+-- 
+2.31.1.windows.1
+
